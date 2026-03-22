@@ -4,3 +4,4 @@ python-dotenv==1.0.1
 Werkzeug==3.1.3
 playwright
 pillow
+gunicorn
