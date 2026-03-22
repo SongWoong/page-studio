@@ -1,0 +1,26 @@
+# 환경변수 (절대 올리면 안 됨)
+.env
+
+# 생성된 페이지 파일들 (배포 후 자동 생성됨)
+data/pages/
+uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Playwright 브라우저 캐시
+.playwright/
+
+# OS
+.DS_Store
+Thumbs.db

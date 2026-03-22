@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page Studio — AI 상세페이지 메이커</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- API 키 입력 모달 -->
+  <div class="apikey-overlay" id="apikey-overlay">
+    <div class="apikey-modal">
+      <div class="apikey-logo">
+        <span class="logo-icon">✦</span>
+        <span class="logo-text">Page Studio</span>
+      </div>
+      <h2 class="apikey-title">시작하기 전에</h2>
+      <p class="apikey-desc">
+        Anthropic API 키를 입력하면 AI가 상세페이지를 만들어드려요.<br>
+        키는 이 브라우저 탭에서만 사용되며 서버에 저장되지 않아요.
+      </p>
+      <div class="apikey-input-wrap">
+        <input type="password" id="apikey-input" class="apikey-input"
+          placeholder="sk-ant-api03-..." autocomplete="off" />
+        <button class="apikey-toggle" onclick="toggleApiKeyVisibility()" title="보기/숨기기">👁</button>
+      </div>
+      <div class="apikey-remember">
+        <label>
+          <input type="checkbox" id="apikey-remember" />
+          이 기기에서 키 기억하기 (브라우저에만 저장)
+        </label>
+      </div>
+      <div class="apikey-error" id="apikey-error" style="display:none;"></div>
+      <button class="btn-primary btn-lg apikey-submit" onclick="submitApiKey()">
+        <span class="btn-icon">✦</span> 시작하기
+      </button>
+      <button class="btn-skip-key" onclick="skipApiKey()">키 없이 계속하기 (관리자용)</button>
+      <p class="apikey-help">
+        API 키가 없으신가요?
+        <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>에서 발급받으세요.
+      </p>
+    </div>
+  </div>
+
+  <!-- 헤더 -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">✦</span>
+        <span class="logo-text">Page Studio</span>
+      </div>
+      <span class="logo-sub">AI 상세페이지 자동 생성</span>
+      <button class="btn-change-key" id="btn-change-key" onclick="changeApiKey()" style="display:none;" title="API 키 변경">🔑 키 변경</button>
+    </div>
+  </header>
+
+  <!-- 히어로 -->
+  <section class="hero" id="hero">
+    <div class="hero-inner">
+      <div class="hero-badge">AI POWERED</div>
+      <h1 class="hero-title">책 정보만 입력하면<br>상세페이지 완성</h1>
+      <p class="hero-desc">AI가 마케팅 멘트를 쓰고, 디자인까지 완성합니다.<br>누구나 공유 가능한 링크로 바로 배포하세요.</p>
+      <button class="btn-primary hero-cta" onclick="startFlow()">지금 시작하기 →</button>
+      <div class="hero-steps">
+        <div class="hero-step"><span>01</span> 책 정보 입력</div>
+        <div class="hero-arrow">→</div>
+        <div class="hero-step"><span>02</span> AI 멘트 생성</div>
+        <div class="hero-arrow">→</div>
+        <div class="hero-step"><span>03</span> 디자인 업로드</div>
+        <div class="hero-arrow">→</div>
+        <div class="hero-step"><span>04</span> 페이지 완성</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 메인 앱 -->
+  <main class="app-container" id="app" style="display:none;">
+
+    <!-- 스텝 인디케이터 -->
+    <div class="step-indicator">
+      <div class="step-item active" id="step-dot-1">
+        <div class="step-dot">1</div>
+        <div class="step-label">책 정보</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" id="step-dot-2">
+        <div class="step-dot">2</div>
+        <div class="step-label">멘트 생성</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" id="step-dot-3">
+        <div class="step-dot">3</div>
+        <div class="step-label">디자인</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step-item" id="step-dot-4">
+        <div class="step-dot">4</div>
+        <div class="step-label">완성</div>
+      </div>
+    </div>
+
+    <!-- STEP 1: 책 정보 입력 -->
+    <div class="step-panel active" id="panel-1">
+      <div class="panel-header">
+        <div class="panel-number">STEP 01</div>
+        <h2 class="panel-title">책 정보를 입력해주세요</h2>
+        <p class="panel-desc">AI가 이 정보를 바탕으로 마케팅 멘트를 만들어요.</p>
+      </div>
+      <form class="input-form" id="book-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">책 제목 <span class="required">*</span></label>
+            <input type="text" id="f-title" class="form-input" placeholder="예: 나는 왜 이 일을 하는가" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">저자명 <span class="required">*</span></label>
+            <input type="text" id="f-author" class="form-input" placeholder="예: 홍길동" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">장르/분야 <span class="required">*</span></label>
+            <input type="text" id="f-genre" class="form-input" placeholder="예: 자기계발, 에세이, 마케팅" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">가격</label>
+            <input type="text" id="f-price" class="form-input" placeholder="예: 16,800원" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">타겟 독자 <span class="required">*</span></label>
+          <input type="text" id="f-target" class="form-input" placeholder="예: 직장에서 방향을 잃은 30대, 창업을 고민하는 직장인" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">핵심 메시지 <span class="required">*</span></label>
+          <textarea id="f-message" class="form-textarea" rows="3" placeholder="예: 일의 의미를 찾지 못하고 하루하루를 버티는 사람들에게 일의 본질과 재미를 되찾아주는 책" required></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">판매 포인트</label>
+          <textarea id="f-points" class="form-textarea" rows="3" placeholder="예: 10만 부 베스트셀러, 저자의 20년 현장 경험, 실전 워크시트 수록"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">상세페이지 몇 페이지로 만들까요? <span class="required">*</span></label>
+          <p style="font-size:13px;color:var(--text-muted,#888);margin-bottom:12px;">섹션(페이지) 수를 선택하세요. 많을수록 더 풍부한 내용으로 만들어져요.</p>
+          <div class="page-count-btns" id="page-count-btns">
+            <button type="button" class="page-count-btn" onclick="setPageCount(5)">5페이지</button>
+            <button type="button" class="page-count-btn" onclick="setPageCount(8)">8페이지</button>
+            <button type="button" class="page-count-btn active" onclick="setPageCount(10)">10페이지</button>
+            <button type="button" class="page-count-btn" onclick="setPageCount(12)">12페이지</button>
+            <button type="button" class="page-count-btn" onclick="setPageCount(15)">15페이지</button>
+            <button type="button" class="page-count-btn" onclick="setPageCount(20)">20페이지</button>
+          </div>
+          <input type="hidden" id="f-page-count" value="10" />
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary btn-lg">
+            <span class="btn-icon">✦</span> AI 멘트 생성하기
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- STEP 2: 멘트 편집 -->
+    <div class="step-panel" id="panel-2">
+      <div class="panel-header">
+        <div class="panel-number">STEP 02</div>
+        <h2 class="panel-title">AI가 만든 멘트를 확인하세요</h2>
+        <p class="panel-desc">각 섹션을 클릭해서 자유롭게 수정할 수 있어요.</p>
+      </div>
+
+      <!-- 로딩 -->
+      <div class="loading-box" id="copy-loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">AI가 마케팅 멘트를 작성하고 있어요...</div>
+        <div class="loading-sub">약 10-20초 소요됩니다</div>
+      </div>
+
+      <!-- 섹션 목록 -->
+      <div id="sections-container" style="display:none;">
+        <div class="sections-list" id="sections-list"></div>
+        <div class="form-actions">
+          <button class="btn-secondary" onclick="goStep(1)">← 다시 입력</button>
+          <button class="btn-primary btn-lg" onclick="goStep(3)">
+            <span class="btn-icon">🎨</span> 디자인 업로드하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: 디자인 업로드 -->
+    <div class="step-panel" id="panel-3">
+      <div class="panel-header">
+        <div class="panel-number">STEP 03</div>
+        <h2 class="panel-title">디자인 레퍼런스를 올려주세요</h2>
+        <p class="panel-desc">참고할 이미지를 최대 5장까지 올리면 AI가 그 스타일로 페이지를 만들어요. (선택사항)</p>
+      </div>
+
+      <div class="upload-area" id="upload-area">
+        <input type="file" id="design-file" accept="image/*" multiple style="display:none;" onchange="handleFileSelect(this)" />
+        <div class="upload-inner" id="upload-inner" onclick="document.getElementById('design-file').click()">
+          <div class="upload-icon">🖼️</div>
+          <div class="upload-text">클릭하거나 이미지를 여기에 드래그하세요</div>
+          <div class="upload-sub">JPG, PNG, WebP · 최대 10장 · 장당 16MB</div>
+        </div>
+      </div>
+
+      <!-- 미리보기 그리드 -->
+      <div class="preview-grid" id="preview-grid"></div>
+
+      <div class="design-skip-notice" id="skip-notice">
+        이미지를 올리지 않으면 AI가 기본 스타일로 상세페이지를 만들어요.
+      </div>
+
+      <div class="form-actions" id="design-actions">
+        <button class="btn-secondary" onclick="goStep(2)">← 멘트 수정</button>
+        <button class="btn-primary btn-lg" onclick="handleDesignAndCreate()">
+          <span class="btn-icon">✨</span> 상세페이지 생성하기
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 4: 완성 -->
+    <div class="step-panel" id="panel-4">
+      <div class="panel-header">
+        <div class="panel-number">STEP 04</div>
+        <h2 class="panel-title">상세페이지가 완성됐어요!</h2>
+        <p class="panel-desc">아래 링크를 공유하면 누구나 볼 수 있어요.</p>
+      </div>
+
+      <!-- 생성 로딩 -->
+      <div class="loading-box" id="page-loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">AI가 상세페이지를 디자인하고 있어요...</div>
+        <div class="loading-sub">약 20-30초 소요됩니다</div>
+      </div>
+
+      <!-- 완성 결과 -->
+      <div id="result-container" style="display:none;">
+        <div class="result-card">
+          <div class="result-icon">🎉</div>
+          <div class="result-title" id="result-title"></div>
+          <div class="result-author" id="result-author"></div>
+          <div class="result-link-box">
+            <span class="link-label">공유 링크</span>
+            <div class="link-row">
+              <input type="text" id="result-link" class="link-input" readonly />
+              <button class="btn-copy" onclick="copyLink()">복사</button>
+            </div>
+          </div>
+          <div class="result-actions">
+            <a id="result-open" href="#" target="_blank" class="btn-primary btn-lg">
+              🔗 페이지 열어보기
+            </a>
+            <button class="btn-secondary" onclick="startNew()">새 페이지 만들기</button>
+          </div>
+          <div class="download-section">
+            <div class="download-label">📥 다운로드</div>
+            <div class="download-btns">
+              <button class="btn-download" onclick="downloadPage('jpg')">
+                <span class="dl-icon">🖼️</span> JPG
+              </button>
+              <button class="btn-download" onclick="downloadPage('png')">
+                <span class="dl-icon">📷</span> PNG
+              </button>
+              <button class="btn-download" onclick="downloadPage('pdf')">
+                <span class="dl-icon">📄</span> PDF
+              </button>
+            </div>
+            <div class="download-notice" id="download-notice" style="display:none;">
+              ⏳ 변환 중... 잠시만 기다려주세요 (10-20초)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 토스트 알림 -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
