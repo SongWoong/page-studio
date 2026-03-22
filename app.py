@@ -4,7 +4,7 @@ import uuid
 import re
 import base64
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, send_file, abort
+from flask import Flask, request, jsonify, render_template, send_file, abort, Response
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
@@ -348,6 +348,68 @@ HTML 구조 요구사항:
             end = len(lines) - 1
         html_content = '\n'.join(lines[start:end])
 
+    # 다운로드 툴바 HTML (html2canvas + jsPDF 사용, 인쇄 시 숨김)
+    download_toolbar = f"""<style>
+#ps-toolbar{{position:fixed;top:0;left:0;right:0;z-index:9999;background:rgba(20,20,40,0.95);
+backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;
+gap:10px;padding:10px 20px;box-shadow:0 2px 12px rgba(0,0,0,0.3)}}
+#ps-toolbar span{{color:#fff;font-size:13px;font-weight:600;margin-right:8px;font-family:'Noto Sans KR',sans-serif}}
+.ps-btn{{padding:8px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;
+cursor:pointer;transition:all 0.2s;font-family:'Noto Sans KR',sans-serif}}
+.ps-btn:hover{{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.2)}}
+.ps-btn-pdf{{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff}}
+.ps-btn-png{{background:linear-gradient(135deg,#3498db,#2980b9);color:#fff}}
+.ps-btn-jpg{{background:linear-gradient(135deg,#2ecc71,#27ae60);color:#fff}}
+.ps-btn-print{{background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff}}
+body{{padding-top:54px}}
+@media print{{#ps-toolbar{{display:none!important}}body{{padding-top:0}}}}
+</style>
+<div id="ps-toolbar">
+  <span>📄 {title}</span>
+  <button class="ps-btn ps-btn-pdf" onclick="psDownload('pdf')">⬇ PDF</button>
+  <button class="ps-btn ps-btn-png" onclick="psDownload('png')">⬇ PNG</button>
+  <button class="ps-btn ps-btn-jpg" onclick="psDownload('jpg')">⬇ JPG</button>
+  <button class="ps-btn ps-btn-print" onclick="window.print()">🖨 인쇄</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+async function psDownload(fmt) {{
+  const toolbar = document.getElementById('ps-toolbar');
+  toolbar.style.display = 'none';
+  document.body.style.paddingTop = '0';
+  try {{
+    const canvas = await html2canvas(document.body, {{
+      scale: 2, useCORS: true, allowTaint: true,
+      windowWidth: 780, scrollY: 0, height: document.body.scrollHeight
+    }});
+    if (fmt === 'pdf') {{
+      const {{ jsPDF }} = window.jspdf;
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      const pdf = new jsPDF({{ orientation: 'portrait', unit: 'px', format: [canvas.width/2, canvas.height/2] }});
+      pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width/2, canvas.height/2);
+      pdf.save('{title}.pdf');
+    }} else if (fmt === 'png') {{
+      const a = document.createElement('a'); a.href = canvas.toDataURL('image/png');
+      a.download = '{title}.png'; a.click();
+    }} else {{
+      const a = document.createElement('a'); a.href = canvas.toDataURL('image/jpeg', 0.92);
+      a.download = '{title}.jpg'; a.click();
+    }}
+  }} finally {{
+    toolbar.style.display = 'flex';
+    document.body.style.paddingTop = '54px';
+  }}
+}}
+</script>"""
+
+    # HTML에 툴바 삽입 (<body> 바로 뒤)
+    if '<body' in html_content:
+        insert_pos = html_content.find('>', html_content.find('<body')) + 1
+        html_content = html_content[:insert_pos] + '\n' + download_toolbar + '\n' + html_content[insert_pos:]
+    else:
+        html_content = download_toolbar + html_content
+
     # 페이지 저장
     page_id = str(uuid.uuid4())[:8]
     html_path = os.path.join(app.config['PAGES_FOLDER'], f"{page_id}.html")
@@ -370,64 +432,8 @@ HTML 구조 요구사항:
 
 @app.route('/api/download/<page_id>/<fmt>')
 def download_page(page_id, fmt):
-    import io
-    safe_id = re.sub(r'[^a-zA-Z0-9\-]', '', page_id)[:8]
-    html_path = os.path.abspath(os.path.join(app.config['PAGES_FOLDER'], f"{safe_id}.html"))
-    if not os.path.exists(html_path):
-        abort(404)
-
-    fmt = fmt.lower()
-    if fmt not in ('jpg', 'png', 'pdf'):
-        abort(400)
-
-    meta_path = os.path.join(app.config['PAGES_FOLDER'], f"{safe_id}.json")
-    book_title = safe_id
-    if os.path.exists(meta_path):
-        with open(meta_path, 'r', encoding='utf-8') as f:
-            meta = json.load(f)
-            book_title = re.sub(r'[\\/*?:"<>|]', '', meta.get('title', safe_id)) or safe_id
-
-    file_url = 'file:///' + html_path.replace('\\', '/')
-
-    try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(viewport={'width': 780, 'height': 900})
-            page.goto(file_url, wait_until='networkidle', timeout=20000)
-            page.wait_for_timeout(1000)  # 폰트 로딩 대기
-
-            if fmt == 'pdf':
-                pdf_bytes = page.pdf(
-                    print_background=True,
-                    width='780px',
-                    margin={'top': '0px', 'right': '0px', 'bottom': '0px', 'left': '0px'}
-                )
-                browser.close()
-                return send_file(
-                    io.BytesIO(pdf_bytes),
-                    mimetype='application/pdf',
-                    as_attachment=True,
-                    download_name=f'{book_title}.pdf'
-                )
-            else:
-                png_bytes = page.screenshot(full_page=True)
-                browser.close()
-                if fmt == 'jpg':
-                    from PIL import Image
-                    img = Image.open(io.BytesIO(png_bytes)).convert('RGB')
-                    jpg_io = io.BytesIO()
-                    img.save(jpg_io, 'JPEG', quality=95)
-                    jpg_io.seek(0)
-                    return send_file(jpg_io, mimetype='image/jpeg',
-                                     as_attachment=True, download_name=f'{book_title}.jpg')
-                else:
-                    return send_file(io.BytesIO(png_bytes), mimetype='image/png',
-                                     as_attachment=True, download_name=f'{book_title}.png')
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"다운로드 실패: {str(e)}"}), 500
+    """다운로드는 브라우저 클라이언트에서 처리 (html2canvas + jsPDF)"""
+    return jsonify({"message": "다운로드는 상세페이지 상단 버튼을 이용해주세요."}), 200
 
 
 @app.route('/view/<page_id>')
